@@ -11,10 +11,11 @@
 using namespace small_gicp;
 
 /// @brief Example of using RegistrationPCL that can be used as a drop-in replacement for pcl::GeneralizedIterativeClosestPoint.
-void example1(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_source) {
+void example1(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_source, double ds_factor,
+  Eigen::Isometry3d& final_transform) {
   // small_gicp::voxelgrid_downsampling can directly operate on pcl::PointCloud.
-  pcl::PointCloud<pcl::PointXYZ>::Ptr target = voxelgrid_sampling_omp(*raw_target, 0.25);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source = voxelgrid_sampling_omp(*raw_source, 0.25);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr target = voxelgrid_sampling_omp(*raw_target, ds_factor);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr source = voxelgrid_sampling_omp(*raw_source, ds_factor);
 
   // RegistrationPCL is derived from pcl::Registration and has mostly the same interface as pcl::GeneralizedIterativeClosestPoint.
   RegistrationPCL<pcl::PointXYZ, pcl::PointXYZ> reg;
@@ -31,7 +32,7 @@ void example1(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const 
   // Align point clouds.
   auto aligned = pcl::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   reg.align(*aligned);
-
+  final_transform = reg.getFinalTransformation().cast<double>();
   std::cout << "--- T_target_source ---" << std::endl << reg.getFinalTransformation() << std::endl;
   std::cout << "--- H ---" << std::endl << reg.getFinalHessian() << std::endl;
 
@@ -40,49 +41,12 @@ void example1(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const 
   reg.swapSourceAndTarget();
   reg.align(*aligned);
 
-  std::cout << "--- T_target_source ---" << std::endl << reg.getFinalTransformation().inverse() << std::endl;
-}
-
-/// @brief Example to directly feed pcl::PointCloud<pcl::PointCovariance> to small_gicp::Registration.
-void example2(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_source) {
-  // Downsample points and convert them into pcl::PointCloud<pcl::PointCovariance>.
-  pcl::PointCloud<pcl::PointCovariance>::Ptr target = voxelgrid_sampling_omp<pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(*raw_target, 0.25);
-  pcl::PointCloud<pcl::PointCovariance>::Ptr source = voxelgrid_sampling_omp<pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(*raw_source, 0.25);
-
-  // Estimate covariances of points.
-  const int num_threads = 4;
-  const int num_neighbors = 20;
-  estimate_covariances_omp(*target, num_neighbors, num_threads);
-  estimate_covariances_omp(*source, num_neighbors, num_threads);
-
-  // Create KdTree for target and source.
-  auto target_tree = std::make_shared<KdTree<pcl::PointCloud<pcl::PointCovariance>>>(target, KdTreeBuilderOMP(num_threads));
-  auto source_tree = std::make_shared<KdTree<pcl::PointCloud<pcl::PointCovariance>>>(source, KdTreeBuilderOMP(num_threads));
-
-  Registration<GICPFactor, ParallelReductionOMP> registration;
-  registration.reduction.num_threads = num_threads;
-  registration.rejector.max_dist_sq = 1.0;
-
-  // Align point clouds. Note that the input point clouds are pcl::PointCloud<pcl::PointCovariance>.
-  auto result = registration.align(*target, *source, *target_tree, Eigen::Isometry3d::Identity());
-
-  std::cout << "--- T_target_source ---" << std::endl << result.T_target_source.matrix() << std::endl;
-  std::cout << "converged:" << result.converged << std::endl;
-  std::cout << "error:" << result.error << std::endl;
-  std::cout << "iterations:" << result.iterations << std::endl;
-  std::cout << "num_inliers:" << result.num_inliers << std::endl;
-  std::cout << "--- H ---" << std::endl << result.H << std::endl;
-  std::cout << "--- b ---" << std::endl << result.b.transpose() << std::endl;
-
-  // Because this usage exposes all preprocessed data, you can easily re-use them to obtain the best efficiency.
-  auto result2 = registration.align(*source, *target, *source_tree, Eigen::Isometry3d::Identity());
-
-  std::cout << "--- T_target_source ---" << std::endl << result2.T_target_source.inverse().matrix() << std::endl;
+  //std::cout << "--- T_target_source ---" << std::endl << reg.getFinalTransformation().inverse() << std::endl;
 }
 
 int main(int argc, char** argv) {
-  std::vector<Eigen::Vector4f> target_points = read_ply("data/target.ply");
   std::vector<Eigen::Vector4f> source_points = read_ply("data/source.ply");
+  std::vector<Eigen::Vector4f> target_points = read_ply("data/translated_source.ply");
   if (target_points.empty() || source_points.empty()) {
     std::cerr << "error: failed to read points from data/(target|source).ply" << std::endl;
     return 1;
@@ -99,9 +63,25 @@ int main(int argc, char** argv) {
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr raw_target = convert_to_pcl(target_points);
   pcl::PointCloud<pcl::PointXYZ>::Ptr raw_source = convert_to_pcl(source_points);
+  Eigen::Isometry3d result;
 
-  example1(raw_target, raw_source);
-  example2(raw_target, raw_source);
+  double truth_x = 0.5;
+  double truth_y = 0.5;
+  double truth_z = 0.5;
+  std::fstream errorFile;
+  errorFile.open("errorAnalysis.csv", std::ios::out);
+	for(double i = 0.3; i < 1.0; i = i + 0.1)
+	{
+  	example1(raw_target, raw_source, i, result);
 
+    double error_x = std::abs(result(0, 3) - truth_x);
+    double error_y = std::abs(result(1, 3) - truth_y);
+    double error_z = std::abs(result(2, 3) - truth_z);
+  
+    errorFile << i << "," << error_x << "," << error_y << "," << error_z << "\n";
+
+    printf("\nerrors are is %lf, %lf, %lf\n", error_x, error_y, error_z);
+
+	}
   return 0;
 }

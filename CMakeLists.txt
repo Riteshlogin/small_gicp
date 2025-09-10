@@ -68,7 +68,7 @@ if (BUILD_WITH_TBB)
 endif()
 
 if (BUILD_WITH_PCL)
-  find_package(PCL REQUIRED)
+	find_package(PCL 1.13.0.99 EXACT REQUIRED)
   add_compile_definitions(BUILD_WITH_PCL)
   if (NOT TARGET PCL::PCL)
     add_library(PCL::PCL INTERFACE IMPORTED)

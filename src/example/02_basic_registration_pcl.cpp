@@ -15,7 +15,7 @@ void example1(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const 
   Eigen::Isometry3d& final_transform) {
   // small_gicp::voxelgrid_downsampling can directly operate on pcl::PointCloud.
   pcl::PointCloud<pcl::PointXYZ>::Ptr target = voxelgrid_sampling_omp(*raw_target, ds_factor);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source = voxelgrid_sampling_omp(*raw_source, ds_factor);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr source = voxelgrid_sampling_omp(*raw_source, 0.95);
 
   // RegistrationPCL is derived from pcl::Registration and has mostly the same interface as pcl::GeneralizedIterativeClosestPoint.
   RegistrationPCL<pcl::PointXYZ, pcl::PointXYZ> reg;
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
   double truth_z = 0.5;
   std::fstream errorFile;
   errorFile.open("errorAnalysis.csv", std::ios::out);
-	for(double i = 0.3; i < 1.0; i = i + 0.1)
+	for(double i = 0.3; i < 0.9; i = i + 0.1)
 	{
   	example1(raw_target, raw_source, i, result);
 

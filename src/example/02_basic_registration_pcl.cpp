@@ -5,17 +5,30 @@
 #include <small_gicp/pcl/pcl_point.hpp>
 #include <small_gicp/pcl/pcl_point_traits.hpp>
 #include <small_gicp/pcl/pcl_registration.hpp>
-#include <small_gicp/util/downsampling_omp.hpp>
+#include <small_gicp/util/downsampling.hpp>
 #include <small_gicp/benchmark/read_points.hpp>
+#include <random>
+
 
 using namespace small_gicp;
 
 /// @brief Example of using RegistrationPCL that can be used as a drop-in replacement for pcl::GeneralizedIterativeClosestPoint.
-void example1(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_source, double ds_factor,
+void align(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_source, double ds_factor,
   Eigen::Isometry3d& final_transform) {
   // small_gicp::voxelgrid_downsampling can directly operate on pcl::PointCloud.
-  pcl::PointCloud<pcl::PointXYZ>::Ptr target = voxelgrid_sampling_omp(*raw_target, ds_factor);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr source = voxelgrid_sampling_omp(*raw_source, 0.95);
+  //pcl::PointCloud<pcl::PointXYZ>::Ptr target = voxelgrid_sampling_omp(*raw_target, ds_factor);
+  //pcl::PointCloud<pcl::PointXYZ>::Ptr source = voxelgrid_sampling_omp(*raw_source, 0.95);
+
+	std::mt19937 mt; 
+	
+	int num_target_points = raw_target->size();
+	int num_source_points = raw_source->size();
+
+	int ds_target_points = num_target_points * ds_factor;
+	int ds_source_points = num_source_points * ds_factor;
+
+	pcl::PointCloud<pcl::PointXYZ>::Ptr target = random_sampling(*raw_target, ds_target_points, mt);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr source = random_sampling(*raw_source, ds_source_points, mt);
 
   // RegistrationPCL is derived from pcl::Registration and has mostly the same interface as pcl::GeneralizedIterativeClosestPoint.
   RegistrationPCL<pcl::PointXYZ, pcl::PointXYZ> reg;
@@ -63,7 +76,10 @@ int main(int argc, char** argv) {
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr raw_target = convert_to_pcl(target_points);
   pcl::PointCloud<pcl::PointXYZ>::Ptr raw_source = convert_to_pcl(source_points);
-  Eigen::Isometry3d result;
+	Eigen::Isometry3d result;
+
+	//int num_target_points = raw_target.size();
+	//int num_source_points = raw_source.size();
 
   double truth_x = 0.5;
   double truth_y = 0.5;
@@ -72,7 +88,8 @@ int main(int argc, char** argv) {
   errorFile.open("errorAnalysis.csv", std::ios::out);
 	for(double i = 0.3; i < 0.9; i = i + 0.1)
 	{
-  	example1(raw_target, raw_source, i, result);
+  	
+		align(raw_target, raw_source, i, result);
 
     double error_x = std::abs(result(0, 3) - truth_x);
     double error_y = std::abs(result(1, 3) - truth_y);

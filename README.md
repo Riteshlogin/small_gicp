@@ -10,4 +10,6 @@ This repository is mostly unchanged from the original, except for a small experi
 
 ![Z_error](data/Z_error.png)
 
- 
+I also wanted to see if a larger translation would result in a greater amount of error, so I increased the translation to one on all axes and measured the error between the output of ICP and this translation of one. The following plot shows the error across all axes.
+
+![Error across all axes](data/AllAxesTranslationOfOne.png) 

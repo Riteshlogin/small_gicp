@@ -36,7 +36,7 @@ void align(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const pcl
   reg.setCorrespondenceRandomness(20);
   reg.setMaxCorrespondenceDistance(1.0);
   reg.setVoxelResolution(1.0);
-  reg.setRegistrationType("VGICP");  // or "GICP" (default = "GICP")
+  reg.setRegistrationType("GICP");  // or "GICP" (default = "GICP")
 
   // Set input point clouds.
   reg.setInputTarget(target);
@@ -59,7 +59,7 @@ void align(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& raw_target, const pcl
 
 int main(int argc, char** argv) {
   std::vector<Eigen::Vector4f> source_points = read_ply("data/source.ply");
-  std::vector<Eigen::Vector4f> target_points = read_ply("data/translated_source.ply");
+  std::vector<Eigen::Vector4f> target_points = read_ply("data/translated_source_more.ply");
   if (target_points.empty() || source_points.empty()) {
     std::cerr << "error: failed to read points from data/(target|source).ply" << std::endl;
     return 1;
@@ -81,11 +81,11 @@ int main(int argc, char** argv) {
 	//int num_target_points = raw_target.size();
 	//int num_source_points = raw_source.size();
 
-  double truth_x = 0.5;
-  double truth_y = 0.5;
-  double truth_z = 0.5;
+  double truth_x = 1;
+  double truth_y = 1;
+  double truth_z = 1;
   std::fstream errorFile;
-  errorFile.open("errorAnalysis.csv", std::ios::out);
+  errorFile.open("errorAnalysisMore.csv", std::ios::out);
 	for(double i = 0.3; i < 0.9; i = i + 0.1)
 	{
   	
